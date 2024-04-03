@@ -115,7 +115,7 @@ class NeuralNetwork:
         y_onehot = np.zeros((y_train.shape[0], 2))
         y_onehot[np.arange(y_train.shape[0]), y_train] = 1
         mses = []
-        for i in range(max_epochs):  # 训练 100 个 epoch
+        for i in range(max_epochs):  # 训练 500 个 epoch
             for j in range(len(X_train)):  # 一次训练一个样本
                 self.backpropagation(X_train[j], y_onehot[j], learning_rate)
                 if i % 10 == 0:
