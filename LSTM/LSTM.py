@@ -138,9 +138,10 @@ class LstmLayer(object):
         """
         实现LSTM训练算法
         """
-        delta_h = expected_h - self.h_list[self.times - 1]
+        delta_h = self.h_list[self.times] - expected_h
         self.calc_delta(delta_h)
         self.calc_gradient(x)
+        self.update()
 
     def update(self):
         """
@@ -304,54 +305,64 @@ class LstmLayer(object):
         self.ct_list = self.init_state_vec(self.state_width)
 
 
-def data_set():
-    # 这里使用简单的线性数据作为示例
-    x = [np.array([[0.1]])]
-    d = np.array([[0.1]])
+import numpy as np
+
+def generate_data_set(sequence_length, num_sequences):
+    """
+    生成一组序列数据，用于测试 LSTM 网络。
+    数据可以根据正弦函数生成，用于模拟连续时间序列。
+    """
+    x = []
+    d = []
+    for _ in range(num_sequences):
+        sequence = np.sin(np.linspace(0, 10, sequence_length)) + np.random.normal(0, 0.01, sequence_length)
+        x.append([np.array([[s]]) for s in sequence[:-1]])  # 输入是序列中前 n-1 项
+        d.append(np.array([[sequence[-1]]]))  # 目标输出是序列最后一项
     return x, d
 
-def test_lstm():
-    # 初始化LSTM层
-    lstm = LstmLayer(1, 1, 1, 0.003)  # 输入宽度1，状态宽度2，学习率0.001
+def improved_test_lstm():
+    # 初始化 LSTM 层
+    lstm = LstmLayer(1, 1, 1, 0.01)  # 输入宽度1，状态宽度1，学习率0.01
+
+    # 生成模拟训练数据集（假设每个序列长度为10，总共训练1000个序列）
+    sequence_length = 10
+    num_sequences = 1000
+    x_train, y_train = generate_data_set(sequence_length, num_sequences)
 
     # 训练参数
-    epochs = 10000  # 训练轮数
-    print_every = 500  # 每100轮打印一次训练状态
-    pre = 0
+    epochs = 100  # 训练轮数
+    print_every = 10  # 每50轮打印一次训练状态
+
     # 训练过程
     for epoch in range(epochs):
-        x, d = data_set()
-        lstm.reset_state()
+        total_loss = 0
+        for i in range(num_sequences):
+            lstm.reset_state()
 
-        # 前向传播
+            # 前向传播
+            for t in range(sequence_length - 1):
+                lstm.forward(x_train[i][t])
 
-        for t in range(len(x)):
-            lstm.forward(x[t].transpose())
+            # 反向传播
+            lstm.backward(x_train[i][-1], y_train[i])
 
-        # 反向传播
-        lstm.backward(x[len(x) - 1].transpose(), d.transpose())
-
-        # 更新权重
-        lstm.update()
+            # 计算损失
+            total_loss += np.mean(np.abs(y_train[i] - lstm.h_list[-1]))
 
         # 打印训练状态
         if epoch % print_every == 0:
-
-            print(f'Epoch {epoch}, loss: {np.mean(np.abs(d - lstm.h_list[-1]))}')
-            # print("change: ", np.mean(np.abs(d - lstm.h_list[-1])) - pre)
-            pre = np.mean(np.abs(d - lstm.h_list[-1]))
-
+            print(f'Epoch {epoch}, average loss: {total_loss / num_sequences}')
 
     # 评估模型
+    test_x, test_y = generate_data_set(sequence_length, 1)
     lstm.reset_state()
-    for t in range(len(x)):
-        lstm.forward(x[t].transpose())
+    for t in range(sequence_length - 1):
+        lstm.forward(test_x[0][t])
     predicted = lstm.h_list[-1]
     print(f'Predicted: {predicted}')
-    print(f'Actual: {d[0]}')
+    print(f'Actual: {test_y[0][0]}')
 
     return lstm
 
-
-# 调用测试函数
-test_lstm()
+# 调用改进的测试函数
+improved_test_lstm()
