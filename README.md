@@ -34,7 +34,7 @@ RNN:
 
 LSTM:
 - **⭐⭐[LSTM原理 浅显版本](https://blog.csdn.net/beiye_/article/details/123621086?spm=1001.2014.3001.5501)**
-- **⭐⭐[LSTM原理+数学+代码](https://blog.csdn.net/qq_73462282/article/details/132073333)**
+- **⭐⭐[LSTM原理+数学+代码](https://blog.csdn.net/qq_73462282/article/details/132073333)**（PS：链接代码有些许bug）
 
 Transformer 框架学习：
 - **⭐⭐[理论学习](https://zhuanlan.zhihu.com/p/82312421)**
@@ -46,5 +46,8 @@ Transformer 框架学习：
 ### 其他
 
 .ipynb 文件形式的 demo 可以在 **colab** 上实践使用。
+
+叮嘱：**不同的深度学习算法，差别只在于不同的参数框架。本质都是利用反向传播进行梯度下降。**
+
 
 未来将不间断更新。
