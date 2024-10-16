@@ -54,7 +54,7 @@ Feature：
 
 | Description                                      | State                           |
 |--------------------------------------------------|---------------------------------|
-| 优化代码结构，解耦                                        | <ul><li>- [x] test  </li> </ul> |
-| LSTM: 可自定义隐藏层深度                                  | Solved                          |
-| 解耦隐藏层的 **state_width** 与 输出层 **output_width** 大小 | <ul><li>[x] item1</li><li>[ ] item2</li></ul>                        |
-| 添加 **Transformer** or **GPT** 模型的手搓代码内容          | - [x] ok?                        |
+| 优化代码结构，解耦                                        | <ul><li> 20%  </li> </ul>         |
+| LSTM: 可自定义隐藏层深度                                  | <ul><li>[x]</li></ul>             |
+| LSTM: 解耦隐藏层的 **state_width** 与 输出层 **output_width** 大小 | <ul><li>[ ]</li></ul>     |
+| 添加 **Transformer** or **GPT** 模型的手搓代码内容          | <ul><li>[ ]</li></ul>            |
