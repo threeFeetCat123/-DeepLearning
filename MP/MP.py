@@ -1,5 +1,5 @@
 from functools import reduce
-
+from Activator import ReLUActivator
 class Perceptron(object):
     def __init__(self, input_num, activator):
         """
@@ -70,15 +70,6 @@ class Perceptron(object):
         self.bias += rate * delta
 
 
-def f(x):
-    """
-    定义激活函数f
-    """
-#   这个不知道是啥玩意，自己捣鼓的，能实现MP不能整的加减法，但都是线性的，异或不行（异或要BP）
-    return x
-#   下面的是经典MP
-#   return 1 if x > 0 else 0
-
 def get_training_dataset():
     """
     基于and真值表构建训练数据
@@ -96,7 +87,7 @@ def train_and_perceptron():
     使用and真值表训练感知器
     """
     # 创建感知器，输入参数个数为2（因为and是二元函数），激活函数为f
-    p = Perceptron(2, f)
+    p = Perceptron(2, ReLUActivator)
     # 训练，迭代10轮, 学习速率为0.1
     input_vecs, labels = get_training_dataset()
     p.train(input_vecs, labels, 1000, 0.01)
