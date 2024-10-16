@@ -1,42 +1,13 @@
 import numpy as np
+from Activator import SigmoidActivator, TanhActivator
+
 
 np.random.seed(42)
 # ReLu 激活函数
-class ReluActivator(object):
-    def forward(self, weighted_input):
-        return max(0, weighted_input)
-
-    def backward(self, output):
-        return 1 if output > 0 else 0
-
-# y = x 激活函数
-class IdentityActivator(object):
-    def forward(self, weighted_input):
-        return weighted_input
-
-    def backward(self, output):
-        return 1
-
-# Sigmoid 激活函数
-class SigmoidActivator(object):
-    def forward(self, weighted_input):
-        return 1.0 / (1.0 + np.exp(-weighted_input))
-
-    def backward(self, output):
-        return output * (1 - output)
-
-# tanh 激活函数
-class TanhActivator(object):
-    def forward(self, weighted_input):
-        return 2.0 / (1.0 + np.exp(-2 * weighted_input)) - 1.0
-
-    def backward(self, output):
-        return 1 - output * output
 
 
 class LstmLayer(object):
-    def __init__(self, input_width, state_width,
-                 output_width, learning_rate):
+    def __init__(self, input_width, state_width, output_width, learning_rate):
         # 目前仅支持 state_width == output_width
         if(state_width != output_width):
             raise ValueError("state_width must be equal to output_width")
@@ -83,16 +54,15 @@ class LstmLayer(object):
 
     # 初始化权重矩阵
     def init_weight_mat(self):
-        Wh = np.random.uniform(-1e-4, 1e-4,
+        Wh = np.random.uniform(-5e-1, 5e-1,
                                (self.state_width, self.output_width))
-        Wx = np.random.uniform(-1e-4, 1e-4,
+        Wx = np.random.uniform(-5e-1, 5e-1,
                                (self.state_width, self.input_width))
         b = np.zeros((self.state_width, 1))
         return Wh, Wx, b
 
     # 计算门
-    def calc_gate(self, x, Wx, Wh, b, activator):
-        h = self.h_list[self.times - 1]  # 上次的LSTM输出
+    def calc_gate(self, x, Wx, h, Wh, b, activator):
         net = np.dot(Wh, h) + np.dot(Wx, x) + b
         gate = activator.forward(net)
         return gate
@@ -111,33 +81,38 @@ class LstmLayer(object):
         """
         self.times += 1
         # 遗忘门
-        fg = self.calc_gate(x, self.Wfx, self.Wfh,
+        fg = self.calc_gate(x, self.Wfx, self.h_list[self.times - 1], self.Wfh,
                             self.bf, self.gate_activator)
         self.f_list.append(fg)
         # 输入门
-        ig = self.calc_gate(x, self.Wix, self.Wih,
+        ig = self.calc_gate(x, self.Wix, self.h_list[self.times - 1], self.Wih,
                             self.bi, self.gate_activator)
         self.i_list.append(ig)
         # 输出门
-        og = self.calc_gate(x, self.Wox, self.Woh,
+        og = self.calc_gate(x, self.Wox, self.h_list[self.times - 1], self.Woh,
                             self.bo, self.gate_activator)
         self.o_list.append(og)
         # 输入的即时状态
-        ct = self.calc_gate(x, self.Wcx, self.Wch,
+        ct = self.calc_gate(x, self.Wcx, self.h_list[self.times - 1], self.Wch,
                             self.bc, self.output_activator)
         self.ct_list.append(ct)
         # 单元状态
         c = fg * self.c_list[self.times - 1] + ig * ct
-
         self.c_list.append(c)
         # 输出
         h = og * self.output_activator.forward(c)
+        assert h.shape == self.bc.shape, f"Shape mismatch: h.shape = {h.shape}, self.bc.shape = {self.bc.shape}"
         self.h_list.append(h)
 
     def backward(self, x, expected_h):
         """
         实现LSTM训练算法
         """
+        # 确保在当前时间步的输出、期望输出和输入的形状相同
+        assert self.h_list[self.times].shape == expected_h.shape, \
+            f"Shape mismatch: self.h_list[self.times].shape = {self.h_list[self.times].shape}, " \
+            f"expected_h.shape = {expected_h.shape},"
+
         delta_h = self.h_list[self.times] - expected_h
         self.calc_delta(delta_h)
         self.calc_gradient(x)
@@ -257,13 +232,13 @@ class LstmLayer(object):
              Wch_grad, bc_grad) = (
                 self.calc_gradient_t(t))
             # 实际梯度是各时刻梯度之和
-            self.Wfh_grad += np.dot(Wfh_grad, self.h_list[t - 1].transpose())
+            self.Wfh_grad += Wfh_grad
             self.bf_grad += bf_grad
-            self.Wih_grad += np.dot(Wih_grad, self.h_list[t - 1].transpose())
+            self.Wih_grad += Wih_grad
             self.bi_grad += bi_grad
-            self.Woh_grad += np.dot(Woh_grad, self.h_list[t - 1].transpose())
+            self.Woh_grad += Woh_grad
             self.bo_grad += bo_grad
-            self.Wch_grad += np.dot(Wch_grad, self.h_list[t - 1].transpose())
+            self.Wch_grad += Wch_grad
             self.bc_grad += bc_grad
 
         # 计算对本次输入x的权重梯度
@@ -305,33 +280,58 @@ class LstmLayer(object):
         self.ct_list = self.init_state_vec(self.state_width)
 
 
-import numpy as np
+def generate_data_set(sequence_length, num_sequences, noise_level=0.02):
+    """
+    生成一组基于正弦波的三维序列数据，用于测试 LSTM 网络。
+    输入是时间点，输出是这些时间点处的三个正弦波值。
 
-def generate_data_set(sequence_length, num_sequences):
+    参数:
+    - sequence_length: 每个序列的长度。
+    - num_sequences: 序列的数量。
+    - noise_level: 添加到输出的噪声水平。
     """
-    生成一组序列数据，用于测试 LSTM 网络。
-    数据可以根据正弦函数生成，用于模拟连续时间序列。
-    """
-    x = []
-    d = []
-    for _ in range(num_sequences):
-        sequence = np.sin(np.linspace(0, 10, sequence_length)) + np.random.normal(0, 0.01, sequence_length)
-        x.append([np.array([[s]]) for s in sequence[:-1]])  # 输入是序列中前 n-1 项
-        d.append(np.array([[sequence[-1]]]))  # 目标输出是序列最后一项
+    x = np.zeros((num_sequences, sequence_length, 1))  # 输入数据，时间点
+    d = np.zeros((num_sequences, sequence_length, 5))  # 目标输出，三个正弦波值
+    t = np.linspace(0, 1, sequence_length * 100 + num_sequences).reshape(-1, 1)
+    for i in range(num_sequences):
+        # 为每个序列生成不同的间隔时间点, 生成1到100的整数
+        random_int = np.random.randint(1, 100)
+        # 生成三个正弦波信号，并添加噪声
+        for j in range(sequence_length):
+            id = i + j * random_int
+            sine_wave1 = np.sin(2 * np.pi * t[id])  # 频率为1的正弦波
+            sine_wave2 = np.sin(2 * np.pi * t[id])  # 频率为2的正弦波
+            sine_wave3 = np.sin(2 * np.pi * t[id])  # 频率为3的正弦波
+            sine_wave4 = np.sin(2 * np.pi * t[id])  # 频率为4的正弦波
+            sine_wave5 = np.sin(2 * np.pi * t[id])  # 频率为5的正弦波
+            # print("now data: ")
+            # print(sine_wave1, sine_wave2, sine_wave3)
+            # 将三个正弦波值作为输出向量的一个维度
+            d[i, j, :] = np.array([
+                sine_wave1 + np.random.normal(0, noise_level),
+                sine_wave2 + np.random.normal(0, noise_level),
+                sine_wave3 + np.random.normal(0, noise_level),
+                sine_wave4 + np.random.normal(0, noise_level),
+                sine_wave5 + np.random.normal(0, noise_level)
+            ]).flatten()
+
+            x[i, j, 0] = 2 * np.pi * t[id]
+
     return x, d
 
-def improved_test_lstm():
+def test_lstmlayer():
     # 初始化 LSTM 层
-    lstm = LstmLayer(1, 1, 1, 0.01)  # 输入宽度1，状态宽度1，学习率0.01
+    lstm = LstmLayer(1, 5, 5, 0.1)  # 输入宽度1，状态宽度1，学习率0.01
 
     # 生成模拟训练数据集（假设每个序列长度为10，总共训练1000个序列）
-    sequence_length = 10
+    sequence_length = 5
     num_sequences = 1000
     x_train, y_train = generate_data_set(sequence_length, num_sequences)
-
+    print(x_train.shape)
+    print(y_train.shape)
     # 训练参数
-    epochs = 100  # 训练轮数
-    print_every = 10  # 每50轮打印一次训练状态
+    epochs = 40  # 训练轮数
+    print_every = 5  # 每10轮打印一次训练状态
 
     # 训练过程
     for epoch in range(epochs):
@@ -341,28 +341,37 @@ def improved_test_lstm():
 
             # 前向传播
             for t in range(sequence_length - 1):
-                lstm.forward(x_train[i][t])
+                input_x = np.array(x_train[i][t]).reshape(-1, 1)
+                # print("x : ", np.array(x_train[i][t]).reshape(-1, 1))
+                lstm.forward(input_x)
+            # print("y : ", np.array(y_train[i][-1]).reshape(-1, 1))
 
             # 反向传播
-            lstm.backward(x_train[i][-1], y_train[i])
+            input_x = np.array(x_train[i][-1]).reshape(-1, 1)
+
+            expected_y = np.array(y_train[i][-1]).reshape(-1, 1)
+            lstm.backward(input_x, expected_y)
 
             # 计算损失
-            total_loss += np.mean(np.abs(y_train[i] - lstm.h_list[-1]))
+            total_loss += np.mean(np.abs(y_train[i][-1] - lstm.h_list[-1].T))
 
         # 打印训练状态
         if epoch % print_every == 0:
-            print(f'Epoch {epoch}, average loss: {total_loss / num_sequences}')
+            print(f'Epoch {epoch}, average loss: {total_loss / num_sequences}\n')
 
     # 评估模型
-    test_x, test_y = generate_data_set(sequence_length, 1)
+    test_x, test_y = generate_data_set(sequence_length, num_sequences)
     lstm.reset_state()
-    for t in range(sequence_length - 1):
-        lstm.forward(test_x[0][t])
-    predicted = lstm.h_list[-1]
-    print(f'Predicted: {predicted}')
-    print(f'Actual: {test_y[0][0]}')
+    for i in range(1 , num_sequences, num_sequences // 5):
+        lstm.reset_state()
+        for t in range(sequence_length - 1):
+            input_x = np.array(test_x[i][t]).reshape(-1, 1)
+            lstm.forward(input_x)
+        predicted = lstm.h_list[-1]
+        print(f'Predicted: {predicted.T}')
+        print(f'Actual: {test_y[i][-1]}\n\n')
 
     return lstm
 
 # 调用改进的测试函数
-improved_test_lstm()
+test_lstmlayer()
